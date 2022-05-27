@@ -1,0 +1,57 @@
+#%RAML 1.0
+version: 1.0.0
+title: caseys-salesforce-integration API
+
+
+traits:
+  client-id-required:
+       headers:
+         client_id:
+           type: string
+         client_secret:
+           type: string
+/api:
+  is: [client-id-required] 
+  /{sobject}:
+    uriParameters:
+      sobject:
+        description: Based on the sObject value respective scheduler will be triggered for sobject
+        example: contact 
+        type : string
+        enum : [contact,case,giftcard,coupon,emailmessage,dailytransaction]     
+    get:
+      description: Queries sObject from Salesforce
+      queryParameters:
+        fromModifiedDate:
+          required: false
+          type: string
+          description: Start Date for Querying Data 
+        toModifiedDate:
+          required: true
+          type: string
+          description: End Date for Querying Data  
+      responses:
+        200:
+          body:
+            application/json:
+  /cache:
+    get:
+       description: Retrieve All Values from Object Store Watermark for lastRunDates for each scenario
+       responses:
+        200:
+          body:
+            application/json:
+              example:  !include examples/cache.json       
+    put:
+      description: Update Specifed Object Store Watermark lastRunDates
+      body:
+        application/json:
+          example: !include examples/cacheUpdateRequest.json      
+      responses:
+        200:
+          body:
+            application/json:        
+              example: !include examples/cacheUpdateResponse.json 
+
+                  
+   

@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+		<flow name="account-sync-complete-loadflow" doc:id="b12cc433-22c1-46d1-8d74-17117713097a">
+		<scheduler doc:name="Scheduler" doc:id="fd39f7e9-e5e0-476a-886c-4a73939124b7" >
+			<scheduling-strategy >
+				<cron expression="${accounts.complete.load.scheduler.cron.expression}"/>
+			</scheduling-strategy>
+		</scheduler>
+		<set-payload value="complete" doc:name="Set Payload" doc:id="60ede34a-91c4-49d8-90c7-e15a5785c3be" />
+		<logger level="INFO" doc:name="Logger" doc:id="55398adc-fece-4dff-ad71-dfb444512abd" message=" flowName: #[flow.name] ,Batch Processing for Complete Load Started"/>
+		<flow-ref doc:name="Flow Reference" doc:id="89248c32-2766-45c3-b556-ca4fe12516ad" name="account-sync-common-flow"/>
+	</flow>
+	<flow name="account-sync-delta-loadflow" doc:id="d1435ab2-7c1c-4816-8079-eb7a049856b4" >
+		<scheduler doc:name="Scheduler" doc:id="5e8b819d-907b-41b1-b74d-f47f44050433" >
+			<scheduling-strategy >
+				<cron expression="${accounts.delta.load.scheduler.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		<set-payload value="delta" doc:name="Set Payload" doc:id="ec41b79d-1299-46f4-90ac-a789ec0bc83a" />
+		<logger level="INFO" doc:name="Logger" doc:id="3ba5a5ca-df15-4a04-b795-936d84e3f821" message=" flowName: #[flow.name] ,Batch Processing for Delta Load Started"/>
+		<flow-ref doc:name="Flow Reference" doc:id="bf408ad6-9870-4988-bc27-146cc7dca78a" name="account-sync-common-flow"/>
+	</flow>
+	<flow name="account-sync-common-flow" doc:id="a35351b1-7189-4667-a1cf-e97dad768247" >
+			<set-variable value="#[now()]" doc:name="TransactionLogging Time Variable" doc:id="b9beefe8-e862-4b78-9b1d-0e6180de0653" variableName="transactionLoggingTime"/>
+	 <set-variable value="#[uuid()]" doc:name="transactionID Variable" doc:id="4058bfcc-4ebd-4d5b-a8ab-fb1846ce23c8" variableName="transactionID"/>
+		<logger level="INFO" doc:name="Logger" doc:id="03c64df4-4f78-489d-b515-be08a388eb02" message="TransactionID: #[vars.transactionID]-batchstart, ###Execution Start###, flowName: #[flow.name]"/>
+		
+		<http:request method="GET" doc:name="Request" doc:id="2ef1c61c-7cc7-4bd1-8413-4aca70ed5a65" config-ref="SFSC_API_Request_configuration" path="#[if(payload as String contains &quot;complete&quot;) p('system.sfsc.accounts.detail') else p('system.sfsc.accounts.delta.detail')]">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Client_id" : p('system.sfsc.api.client_id'),
+	"Client_secret" : p('system.sfsc.api.client_secret'),
+	"content-type" : "application/json"
+}]]]></http:headers>
+		</http:request>
+		<set-variable value="#[sizeOf(payload)]" doc:name="TotalCount" doc:id="c46f6062-45e5-4e12-ba74-cfbf37addf3d" variableName="requestcount" />
+		<logger level="INFO" doc:name="Logger" doc:id="987c0df4-d49f-4333-8a91-bc9d7290ca7f" message="TransactionID: #[vars.transactionID], No. of CID recieved from Salesforce #[vars.requestcount], Incoming requests #[payload]"/>
+		<foreach doc:name="For Each" doc:id="8c6b8a7e-312b-45d5-859b-b4c68ce5539f" collection="#[payload]">
+			<set-variable value="#[payload]" doc:name="current" doc:id="b559ef35-fe0c-4f5e-a90e-b21082e9f33c" variableName="request"/>
+			<try doc:name="Try" doc:id="e193daea-f6c4-4a30-b5c7-43e9b4d073f5" >
+				<http:request method="POST" doc:name="Request" doc:id="b4bde6e3-13b5-4d5b-bfbe-64874698537f" config-ref="HTTP_Customer_ProcessAPI_configuration" path="${pa.accounts.detail}">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Client_id" : p('process.api.client_id'),
+	"Client_secret" : p('process.api.client_secret'),
+	"content-type" : "application/json"
+}]]]></http:headers>
+		</http:request>
+				<logger level="INFO" doc:name="Logger" doc:id="20186aee-fb0a-49e4-be94-a0c248207e03" message="TransactionID: #[vars.transactionID]### Response from process api:  #[payload]"/>
+				<error-handler >
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="0b220f43-9753-4418-aa7e-ef6e08091931" >
+						<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	"request" : vars.request,
+	"response" : 
+		{
+			"error" : {
+				"errorCategory" :"INTERNAL_ERROR",
+				"errorMessage" : "Please check with Mulesoft Team"
+			}
+		}
+}]' doc:name="errordata" doc:id="89ba2fd4-daf2-4672-9540-a58b1d7a5c12" />
+						<os:store doc:name="Store" doc:id="c5247daa-80ea-46ff-b0cf-f49b727fad67" key='#["MULE_ERROR"]' objectStore="Accounts_Object_store"/>
+					</on-error-continue>
+				</error-handler>
+			</try>
+			<set-variable value="#[if (payload.punchh_id_lkup == &quot;true&quot; and payload.punchh_create ==&quot;true&quot; and payload.sf_update == &quot;true&quot;)
+&quot;NewUpd_Success_&quot;++ vars.request.user.cid
+else if ( payload.sf_update == &quot;true&quot;) 
+&quot;Upd_Success_&quot;++ vars.request.user.cid
+else if(payload.error.errorCategory != null or payload.error.errorCategory !='')
+&quot;ERROR_&quot;++ vars.request.user.cid
+else
+&quot;INTERNAL_ERROR_&quot;++ vars.request.user.cid]" doc:name="set OS Key" doc:id="279fd6de-684f-4899-b10d-928dbabbdcdb" variableName="OS_AccountKey"/>
+			<logger level="INFO" doc:name="LogKey" doc:id="1917b82c-5fff-4978-b008-f6e6f97b165d" message="#[vars.OS_AccountKey]"/>
+			<os:store doc:name="Store" doc:id="db80cbe0-a8f2-42f5-8a40-bf7531a97f2c" key="#[vars.OS_AccountKey]" objectStore="Accounts_Object_store">
+				<os:value ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	"request" : vars.request,
+	"response" : payload
+}]]]></os:value>
+			</os:store>
+		</foreach>
+		<os:retrieve-all doc:name="Retrieve all" doc:id="4e075dd4-1eb9-4cdc-91dc-2d342865a32c" objectStore="Accounts_Object_store"/>
+		<set-payload value='#[%dw 2.0
+output application/json
+
+var error1 = payload filterObject((value, key) -&gt; (key as String startsWith("ERROR")))
+var success1 = payload filterObject ((value, key) -&gt; (key as String startsWith("NewUpd_Success")))
+var success2 = payload filterObject ((value, key) -&gt; (key as String  startsWith("Upd_Success")))  
+var error2 = payload filterObject ((value, key) -&gt; (key as String startsWith("MULE_ERROR")))  
+var error3 = payload filterObject ((value, key) -&gt; (key as String startsWith("INTERNAL_ERROR")))
+var success_count = (if(sizeOf(success2)&gt;0) sizeOf(success2)else 0 + if(sizeOf(success1)&gt;0) sizeOf(success1)else 0) 
+
+
+---
+{
+	"total_count":vars.requestcount,
+	"sf_success_count":if(sizeOf(success2)&gt;0) sizeOf(success2)else 0,
+	"punch_success_count":if(sizeOf(success1)&gt;0) sizeOf(success1)else 0,
+	"processed_error_count":if(sizeOf(error1)&gt;0) sizeOf(error1)else 0 ,
+	"batch_tech_error_count":if(sizeOf(error2)&gt;0) sizeOf(error2)else 0 ,
+	"customer_app_tech_error_count":if(sizeOf(error3)&gt;0) sizeOf(error3)else 0 ,
+	"processed_error_data":error1,
+	"batch_tech_error_data":error2,
+	"customer_app_tech_error_data":error3
+	
+
+}]' doc:name="Set Payload" doc:id="6ab04dda-09d5-4b7f-b36c-0857f94a2ee6" />
+		<logger level="INFO" doc:name="Logger" doc:id="e9c3b69e-0d0f-4389-9957-4ab369142198" message="TransactionID: #[vars.transactionID] #### Computing the results ### #[payload]"/>
+		<set-variable value='#["Total No. of Records : " ++ vars.requestcount
+ ++ 
+ " No. of Users Updated to Salesforce : "  ++ payload.sf_success_count 
+ ++ " No. of Users registered at punchh : " ++ payload.punch_success_count 
+ ++ " No. of Users failed during processing : " ++ payload.processed_error_count ++  " No. of technical errors in batch app : "  ++ payload.batch_tech_error_count ++ " No. of technical errors in customer app : "  ++  payload.customer_app_tech_error_count]' doc:name="Set Variable" doc:id="13904347-c06e-4f66-91ee-94868fe023e7" variableName="mailmsg"/>
+		<ee:transform doc:name="Transform Message" doc:id="de3cf09e-8439-492e-b698-f8e05caa184c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "type": p('email.notification.type.info'),
+    "subject": p('accounts.notification.subject'),
+	"message" : vars.mailmsg,
+	"recipient": p('email.notification.recipients') splitBy ",",
+    "integrationName" : p('integration.name'),
+    "attachment" : 
+ 		{    
+ 		 	"fileName" : (splitBy("BatchResult_Updates",".")[0]   ++ ".json") as String,     	
+			"content" : write(payload,"application/json")     
+		}
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Flow Reference" doc:id="ed09ba10-b9aa-4fc7-84a2-33d4b9e383a4" name="sendmailSub_Flow"/>
+		<os:clear doc:name="Clear" doc:id="fedfeab1-53f5-47bc-a29b-5ebcdf0a9261" objectStore="Accounts_Object_store"/>
+		<logger level="INFO" doc:name="Logger" doc:id="da01880d-2e61-493a-8cde-f53935e38d9a" message="TransactionID: #[vars.transactionID] Batch Job Ends ---#####" />
+	</flow>
+	
+	<sub-flow name="sendmailSub_Flow" doc:id="8a544487-5b07-489c-b134-10f667e209c2" >
+		<logger level="INFO" doc:name="Logger" doc:id="ae03a84c-924b-4ae8-b4f2-5cab4c820d67" message="#[%dw 2.0
+output application/json
+---
+payload]"/>
+		<http:request method="POST" doc:name="Request Send Email API" doc:id="11be2024-c85a-44a6-ae03-6df4f8e95142" outputMimeType="application/json" config-ref="Notification_Request_configuration1" path="${http.email.notification.path}">
+						<http:headers><![CDATA[#[output application/java
+---
+{
+	"client_id" : p('http.email.notification.clientid'),
+	"client_secret" : p('http.email.notification.clientsecret'),
+	"Content-type" : "application/json"
+}]]]></http:headers>
+					</http:request>
+	</sub-flow>
+</mule>

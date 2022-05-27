@@ -1,0 +1,2 @@
+{"minMuleVersion":"4.1.5","secureProperties":
+["azure.sastoken","http.email.notification.clientsecret","system.sfmc.api.client_secret","system.sfsc.api.client_secret","sa.store_client_secret","key.password","key.keypassword"]}

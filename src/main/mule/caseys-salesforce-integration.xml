@@ -1,0 +1,500 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd 
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	<sub-flow name="caseys-sfsc-datawarehouse-common-subFlow" doc:id="0190f5f0-c6d3-4e28-961c-aa3dedd077fc" >
+		<os:clear doc:name="Clear Batch OS" doc:id="63915196-2300-4d0d-8cf4-ceddb7890b65" objectStore="Batch_Object_store"/>
+		<!-- <set-variable value="#[vars.sobject]" doc:name="Set SFSC Call URI Param " doc:id="ce00cbbc-778c-468c-9aa5-cbce47edcb33" variableName="sfscuriparam" />
+	 -->	<flow-ref doc:name="SFSC-API_CallFlow" doc:id="dcda2cae-8c79-4134-83a8-08ea0d1304eb" name="SFSC-API_CallFlow" />
+		<set-variable value="#[payload.jobId]" doc:name="Set JobId" doc:id="f0568185-fdca-4b35-a6da-6177c0e3db75" variableName="jobId" />
+		<set-variable value="#[now()]" doc:name="Set Current TimeStamp" doc:id="9dbf3c96-3b8d-408f-aa72-97296ed00b72" variableName="currenttime" />
+		<until-successful maxRetries="${until.successful.max.retries}" doc:name="Until Successful" doc:id="cb92cf65-00f9-4c13-8262-e60efcba17bd" millisBetweenRetries="${until.successful.retry.frequency}">
+			<flow-ref doc:name="getBatchInfosFlow" doc:id="c9b40eaf-5ed3-4fac-b614-ee9aefa91107" name="getBatchInfosFlow" />
+		</until-successful>
+		<flow-ref doc:name="onbatch-completionSub_Flow" doc:id="7f9151fe-15ba-4e0a-98e2-2b4279a03bbd" name="onbatch-completionSub_Flow"/>
+	</sub-flow>
+	<flow name="scheduler_contact" doc:id="a58fab5e-41c3-42d8-832f-9ea5531f7d73">
+	<scheduler doc:name="Scheduler" doc:id="902c7e0c-cf76-4f59-86b6-bbfb83156005" >
+			<scheduling-strategy >
+				<cron expression="${sfsc.scheduler_contacts.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		 <set-variable value="#[[now(),uuid()]]" doc:name="Set Logger ID" doc:id="ca646ade-102e-4679-8179-927502621832" variableName="transactionLogging"/>
+		 <set-variable value="lastRunDateContact" doc:name="Set cache key to contact" doc:id="741b01f7-3652-4b26-be78-324eb3ac7e48" variableName="key"/>
+		<set-variable value="${sfsc.sobject.type.contact}" doc:name="Set sobject to contact" doc:id="50401832-939b-458a-9b2e-2babbc8e0825" variableName="sobject"/>
+		<flow-ref doc:name="caseys-sfsc-datawarehouse-common-integrationFlow" doc:id="0e21a106-3e5f-49eb-ab0f-f7a4128422a3" name="caseys-sfsc-datawarehouse-common-integrationFlow"/>
+			
+	</flow>
+	<flow name="scheduler_case" doc:id="56a4feb1-9a99-4f94-ab77-f4654543bfa7">
+	<scheduler doc:name="Scheduler" doc:id="e30b32f2-bbac-4049-8bb0-7ea274aa93b6" >
+			<scheduling-strategy >
+				<cron expression="${sfsc.scheduler_case.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		 <set-variable value="#[[now(),uuid()]]" doc:name="Set Logger ID" doc:id="e01617ee-65b2-4029-aa74-57e4db735270" variableName="transactionLogging"/>
+		 <set-variable value="lastRunDateCase" doc:name="Set cache key to case" doc:id="0b607d1d-70b0-4e8e-9f53-015211a72403" variableName="key"/>
+		<set-variable value="${sfsc.sobject.type.case}" doc:name="Set sobject to case" doc:id="c919a997-5130-4733-91ed-97018d7a9553" variableName="sobject"/>
+		 <flow-ref doc:name="caseys-sfsc-datawarehouse-common-integrationFlow" doc:id="5169dd4f-024b-4dcd-ad1a-2d7de4ec2b56" name="caseys-sfsc-datawarehouse-common-integrationFlow"/>
+			
+	</flow>
+	<flow name="scheduler_coupon" doc:id="5682c8bd-1391-4037-b8f7-f6658c842315">
+	<scheduler doc:name="Scheduler" doc:id="ed00e6d7-802d-42e4-bd01-5b41c9818130" >
+			<scheduling-strategy >
+				<cron expression="${sfsc.scheduler_coupons.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		 <set-variable value="#[[now(),uuid()]]" doc:name="Set Logger ID" doc:id="df26157a-8a21-4200-80da-e2d776ae6449" variableName="transactionLogging"/>
+		 <set-variable value="lastRunDateCoupon" doc:name="Set cache key to coupon" doc:id="20062bf3-e9f4-4e67-8c5e-85be580a4488" variableName="key"/>
+		<set-variable value="${sfsc.sobject.type.coupon}" doc:name="Set sobject to coupon" doc:id="2ba71069-62c2-483d-bc28-a35b92ab21a1" variableName="sobject"/>
+		 <flow-ref doc:name="caseys-sfsc-datawarehouse-common-integrationFlow" doc:id="7b1be57d-e5a7-444a-8b86-2a924b3847eb" name="caseys-sfsc-datawarehouse-common-integrationFlow"/>
+	
+	</flow>
+	<flow name="scheduler_giftcard" doc:id="c746f0b9-c8fb-4c8a-aa87-6758d94bed81">
+	<scheduler doc:name="Scheduler" doc:id="a767dad9-b525-46fa-a523-9771ffb8b63c" >
+			<scheduling-strategy >
+				<cron expression="${sfsc.scheduler_giftcards.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		 <set-variable value="#[[now(),uuid()]]" doc:name="Set Logger ID" doc:id="decf17af-7b30-4eaf-8663-2765b9d977b4" variableName="transactionLogging"/>
+		 <set-variable value="lastRunDateGiftCard" doc:name="Set cache key to giftcard" doc:id="6dc159b5-1642-4c90-a1fc-d39f5d2829aa" variableName="key"/>
+		<set-variable value="${sfsc.sobject.type.giftcard}" doc:name="Set sobject to giftcard" doc:id="fa8baf7d-ef7f-44ed-9814-eb64cefea64c" variableName="sobject"/>
+		 <flow-ref doc:name="caseys-sfsc-datawarehouse-common-integrationFlow" doc:id="aa2de61d-0ff3-4c2a-af99-b815594cc15d" name="caseys-sfsc-datawarehouse-common-integrationFlow"/>
+		
+	</flow>
+	<flow name="scheduler_emailmessage" doc:id="4f3282df-7dd6-4552-b3ed-999bf43ba5f8">
+		<scheduler doc:name="Scheduler" doc:id="b4d5db9e-043c-4f0e-a941-3b72e015e2a3" >
+			<scheduling-strategy >
+				<cron expression="${sfsc.scheduler_emailmessage.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		 <set-variable value="#[[now(),uuid()]]" doc:name="Set Logger ID" doc:id="cf905219-a22d-4c93-886e-5bcfc592e30a" variableName="transactionLogging"/>
+		 <set-variable value="lastRunDateEmailMessage" doc:name="Set cache key to emailmessage" doc:id="8d864f0f-33db-4ef2-9094-6290d377fe2c" variableName="key"/>
+		<set-variable value="${sfsc.sobject.type.emailmessage}" doc:name="Set sobject to emailmessage" doc:id="6e336478-8268-4359-ac3e-a558d66fbb93" variableName="sobject"/>
+		 <flow-ref doc:name="caseys-sfsc-datawarehouse-common-integrationFlow" doc:id="14d5fb78-7504-4f2b-9657-452f149889e8" name="caseys-sfsc-datawarehouse-common-integrationFlow"/>
+		
+	</flow>
+	<flow name="caseys-sfsc-datawarehouse-common-integrationFlow" doc:id="1d4e6c6f-8d2f-48ac-b2b9-88b18c1f9c2e" >
+		<os:retrieve doc:name="Retrieve LastRunDate" doc:id="b8dce259-7a6b-4337-82a3-1dca94f76e23" key="#[vars.key]" target="lastRunDate" objectStore="Object_store_Watermark">
+		</os:retrieve>
+		<ee:transform doc:name="Set QueryParams" doc:id="053801ed-62bc-4d2a-a4a7-088015770db5" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="queryParams" ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	lowerbounddate : vars.lastRunDate
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="caseys-sfsc-datawarehouse-common-subFlow" doc:id="f8d3be6d-3153-4630-ade0-060fcc1dba12" name="caseys-sfsc-datawarehouse-common-subFlow" />
+		<os:store doc:name="Update LastRunDate to ObjectStore" doc:id="a6e30298-e94f-4245-b016-886b83957d02" key="#[vars.key]" objectStore="Object_store_Watermark">
+			<os:value><![CDATA[#[vars.currenttime as String {format:p('sfsc.lastrundate.date.format')}]]]></os:value>
+		</os:store>
+							
+	</flow>
+	<flow name="vmlistener-process-queryresultsetFlow" doc:id="355e0e9c-acd0-4c58-8e01-a93624a9060c" >
+		<vm:listener queueName="${vm.queue.name}" doc:name="Listener" doc:id="257cfff1-c01f-48d9-8e56-7ed32ea44b42" config-ref="BatchInfo_VM_Config"  numberOfConsumers="${vm.numberof.consumers}" timeout="${vm.queue.timeout.insec}"/>
+		<set-variable value="#[payload.metadata.jobId]" doc:name="Set CorrelationId" doc:id="4389f283-382e-4f2f-b291-75cfe5776abb" variableName="correlationId"/>
+		<ee:transform doc:name="Transform to JSON" doc:id="3febc063-05f5-4441-9170-d74fdbf84363" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.payload map ($ - "resultSetProcessed")]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each BatchInfo" doc:id="40509ecb-c317-48a9-80df-6b0aaf2c046f" >
+			<logger level="INFO" doc:name="Logging BatchInfo" doc:id="6d6fc2a8-3e06-4d81-a90f-c16ea8f92d84" message="CorrelationId:: #[vars.correlationId] Processing BatchId: #[payload.id] NumberOfRecordsProcessed: #[payload.numberRecordsProcessed]" />
+			<try doc:name="Try" doc:id="eae276ff-e5d9-4c76-9d89-73f358982d99" >
+				<http:request method="POST" doc:name="Get Query ResultSet" doc:id="310d6e5b-0735-4292-a093-f59f23cb6c06" config-ref="SFSC_API_Request_configuration" path="${system.sfsc.api.getresultset.path}" outputMimeType="application/json" requestStreamingMode="ALWAYS"/>
+				<error-handler >
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="073b96fd-eace-45c7-9e7f-f3905b57a359" >
+						<ee:transform doc:name="Notifiation Payload" doc:id="597f83d4-7599-4986-a60f-de9bd4286b0d" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json --- 
+{     
+	"type": p('email.notification.type.info'),    
+	"subject": p('failure.queryresultset.email.notification.subject'),    
+	"message": p('failure.queryresultset.email.notification.message') ++ " " ++ payload.jobId ++ " BatchId: " ++ payload.id  ++ " with error: " ++ error.description,   
+	"recipient": p('email.notification.recipients') splitBy "," , 
+	"integrationName" : p('integration.name'),   
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<flow-ref doc:name="Notification_flow" doc:id="ed9a64eb-e9b6-41d5-bbdf-a72977e9be67" name="Notification_flow"/>
+					</on-error-continue>
+				</error-handler>
+			</try>
+			<set-variable value="#[if (isEmpty(payload.queryResult)) &quot;default&quot; else lower(payload.queryResult.records.'type' as String)]" doc:name="Set QueryResultSet Type" doc:id="626cbf11-313e-44d4-9a8f-9fee77ac1006" variableName="recordType"/>
+			<ee:transform doc:name="Transform to Java" doc:id="e17e5f72-b405-4acd-abc1-8a5e665afd7e">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload.queryResult.*records]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<choice doc:name="Choice" doc:id="ce80ffb4-cc4f-4f4f-a226-55bda888dc6f" >
+				<when expression="#[vars.recordType == p('sfsc.sobject.type.contact')]">
+					<ee:transform doc:name="Converting Paylod to CSV" doc:id="dad9bc99-f959-43ba-9ba9-6219fb724d1d">
+		<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv headerLineNumber = 0 , header = false , separator = "|"  , quoteValues = true , quote="\""
+---
+payload  map {
+	"ID" : $.Id, 
+"Age__c" : $.Age__c,
+"Birthdate" : $.Birthdate, 
+"CodeBroker_Legacy_ID__c" : $.CodeBroker_Legacy_ID__c, 
+"CreatedById" : $.CreatedById, 
+"CROC_Legacy_ID__c" : $.CROC_Legacy_ID__c, 
+"Customer_Age_Range__c" : $.Customer_Age_Range__c, 
+"Customer_Created_Source__c" : $.Customer_Created_Source__c,  
+"Description" : $.Description, 
+"HasOptedOutOfEmail": $.HasOptedOutOfEmail, 
+"Emma_Legacy_ID__c" : $.Emma_Legacy_ID__c, 
+"Favorite_Order__c" : $.Favorite_Order__c, 
+"Favorite_Store__c" : $.Favorite_Store__c, 
+"GasBuddy_Legacy_ID__c" : $.GasBuddy_Legacy_ID__c, 
+"Gender__c" : $.Gender__c, 
+"Global_Reach_Legacy_ID__c" : $.Global_Reach_Legacy_ID__c, 
+"Hybris_Account_Holder_Since__c" : $.Hybris_Account_Holder_Since__c, 
+"Hybris_App_First_Order__c" : $.Hybris_App_First_Order__c,
+"Hybris_App_Last_Order__c" : $.Hybris_App_Last_Order__c, 
+"Hybris_Customer_Since__c" : $.Hybris_Customer_Since__c, 
+"Hybris_Legal_Consent__c" : $.Hybris_Legal_Consent__c, 
+"Hybris_OMS_First_Order__c" : $.Hybris_OMS_First_Order__c, 
+"Hybris_OMS_Last_Order__c" : $.Hybris_OMS_Last_Order__c, 
+"Hybris_Web_First_Order__c" : $.Hybris_Web_First_Order__c, 
+"Hybris_Web_Last_Order__c" : $.Hybris_Web_Last_Order__c, 
+"Is_Hybris_Account_Holder__c" : $.Is_Hybris_Account_Holder__c, 
+"Is_Hybris_App__c" : $.Is_Hybris_App__c,
+"Is_Hybris_Customer__c" :  $.Is_Hybris_Customer__c, 
+"Is_Hybris_OMS__c" : $.Is_Hybris_OMS__c, 
+"Is_Hybris_Web__c" : $.Is_Hybris_Web__c, 
+"Is_Master_Record__c" : $.Is_Master_Record__c, 
+"Is_Subscribed_to_Email__c" : $.Is_Subscribed_to_Email__c, 
+"Is_Subscribed_to_SMS__c" : $.Is_Subscribed_to_SMS__c, 
+"LastModifiedById" : $.LastModifiedById, 
+"Legacy_ID__c" : $.Legacy_ID__c, 
+"Legacy_Source__c" : $.Legacy_Source__c,
+"MobilePhone" : $.MobilePhone,  
+"Name" : $.Name,  
+"MailingStreet" : $.MailingStreet, 
+"MailingCity" : $.MailingCity, 
+"MailingState" : $.MailingState, 
+"MailingPostalCode" : $.MailingPostalCode, 
+"Primary_Email__c" : $.Primary_Email__c,
+ "Punchh_ID__c" : $.Punchh_ID__c, 
+"QuikOrder_Legacy_ID__c" : $.QuikOrder_Legacy_ID__c, 
+"QuikOrder_Username__c" : $.QuikOrder_Username__c, 
+"Speedline_ID__c" : $.Speedline_ID__c,  
+"CreatedBy_Email" : $.CreatedBy.Email, 
+"LastModifiedBy.Email" : $.LastModifiedBy.Email,
+"Double_Opt_In_Pending_SMS__c" : $.Double_Opt_In_Pending_SMS__c, 
+"Opt_In_Date_Email__c" : $.Opt_In_Date_Email__c, 
+"Opt_In_Date_SMS__c" : $.Opt_In_Date_SMS__c, 
+"Opt_In_Source_Email__c" : $.Opt_In_Source_Email__c, 
+"Opt_In_Source_SMS__c" : $.Opt_In_Source_SMS__c, 
+"Opt_Out_Date_Email__c" : $.Opt_Out_Date_Email__c, 
+"Opt_Out_Date_SMS__c" : $.Opt_Out_Date_SMS__c,
+"CreatedDate" : $.CreatedDate
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<set-variable value="${sfsc.contactheaders}" doc:name="Set Contact Header Variable" doc:id="ef0f9706-8e02-4e8f-8157-1eed84cc232b" variableName="headers" />
+					
+					<ee:transform doc:name="OutputFilename" doc:id="e44e4994-9e69-45c5-9b07-0c24591e3c2e">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="OutputFilename"><![CDATA[%dw 2.0
+output application/java
+---
+p('datawarehouse.filename.contact') ++ "_" ++ (now() as String {format: p('azure.file.name.format')}) ++ "_" ++ vars.counter ++ p('azure.file.extension')
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+					<flow-ref doc:name="Azure-API_CallFlow" doc:id="1fa5c313-c39c-4320-aab6-6671d50d3c32" name="Azure-API_CallFlow"/>
+					
+				</when>
+				<when expression="#[vars.recordType == p('sfsc.sobject.type.case')]">
+					<ee:transform doc:name="Converting Payload to CSV" doc:id="c3c06ac4-72ee-4efc-a8ba-99664379f14f">
+		<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv headerLineNumber = 0 , header = false , separator = "|"  , quoteValues = true , quote="\""
+---
+payload map { 
+  "ID" : $.Id,
+  "Action_Taken__c": $.Action_Taken__c,   
+  "Amount__c": $.Amount__c,    
+  "Black_Hawk_Case_Number__c": $.Black_Hawk_Case_Number__c,   
+  "Card_Number__c": $.Card_Number__c,  
+  "Card_Type__c": $.Card_Type__c,   
+  "CaseNumber": $.CaseNumber,   
+  "Origin": $.Origin, 
+  "Owner" : $.Owner.Email,
+  "Reason": $.Reason,  
+  "RecordType": $.RecordType as String default "",  
+  "IsClosedOnCreate": $.IsClosedOnCreate,  
+  "Coupon_Sent__c": $.Coupon_Sent__c,  
+  "Coupon_Type__c": $.Coupon_Type__c,
+  "CreatedBy_Email" : $.CreatedBy.Email,   
+  "Created_Method__c": $.Created_Method__c,  
+  "ContactID": $.ContactId,   
+  "Customer_Satisfaction_With_Resolution__c": $.Customer_Satisfaction_With_Resolution__c,  
+  "Date_Issued__c": $.Date_Issued__c,   
+  "ClosedDate": $.ClosedDate,  
+  "CreatedDate": $.CreatedDate, 
+  "Department__c": $.Department__c, 	
+  "Day_of_Week_Case_Created__c": $.Day_of_Week_Case_Created__c, 
+  "Description": $.Description,  
+  "Disposition__c": $.Disposition__c,   
+  "IsEscalated": $.IsEscalated, 
+  "First_Social_Contact__c": $.First_Social_Contact__c,  
+  "Follow_up_Action__c": $.Follow_up_Action__c,  
+  "Fraud_Escalate__c": $.Fraud_Escalate__, 
+  "Gift_Card_Amount__c": $.Gift_Card_Amount__c, 
+  "Gift_Card_Issue__c": $.Gift_Card_Issue__c,  
+  "Gift_Card_Number__c": $.Gift_Card_Number__c, 
+  "Hour_Case_Created__c": $.Hour_Case_Created__c, 
+  "Indicator__c": $.Indicator__c, 
+  "Indicator_2__c": $.Indicator_2__c,  
+  "Initial_Post_Time__c": $.Initial_Post_Time__c, 
+  "Comments": $.Comments,   
+  "Is_Closed__c": $.Is_Closed__c,  
+  "Is_in_Progress__c": $.Is_in_Progress__c, 
+  "Is_Open_Case__c": $.Is_Open_Case__c,  
+  "Is_Valid_Case__c": $.Is_Valid_Case__c,
+  "LastModifiedBy_Email" : $.LastModifiedBy.Email,
+  "Priority": $.Priority,  
+  "Receipt_Number__c": $.Receipt_Number__c,  
+  "Replacement_Gift_Card_Number__c": $.Replacement_Gift_Card_Number__c,  
+  "Social_Classification__c": $.Social_Classification__c,  
+  "Social_Labels__c": $.Social_Labels__c, 
+  "Social_Process_Builder_Case_Status__c": $.Social_Process_Builder_Case_Status__c,  
+  "Status": $.Status, 
+  "Store__r": $.Store__r as String default "",  
+  "Store_Visit_Date_Time__c": $.Store_Visit_Date_Time__c, 
+  "Sub_Types__c": $.Sub_Types__c,  
+  "Sub_Type_2__c": $.Sub_Type_2__c,  
+  "Subject": $.Subject, 
+  "Time_to_First_Contact__c" : $.Time_to_First_Contact__c, 
+  "Type": $.Type,   
+  "Type_2__c": $.Type_2__c, 
+  "Was_Reopened__c": $.Was_Reopened__c
+  }
+]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<set-variable value="${sfsc.casesheaders}" doc:name="Set Cases Header Variable" doc:id="15507153-cbfb-410e-9309-28cf01357b4b" variableName="headers" />
+					
+		<ee:transform doc:name="OutputFilename" doc:id="17814289-7136-4bc6-bfd4-32a93651c271" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="OutputFilename" ><![CDATA[%dw 2.0
+output application/java
+---
+p('datawarehouse.filename.cases') ++ "_" ++ (now() as String {format: p('azure.file.name.format')}) ++ "_" ++ vars.counter ++ p('azure.file.extension')]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+					<flow-ref doc:name="Azure-API_CallFlow" doc:id="f5c08354-27c4-4de1-96a2-05fdf4d126ff" name="Azure-API_CallFlow"/>
+				
+</when>
+				<when expression="#[vars.recordType == p('sfsc.sobject.type.giftcard')]">
+					<ee:transform doc:name="Converting Paylod to CSV" doc:id="093bf9ec-8fc9-4e0f-a635-042fedabc3c4">
+		<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv headerLineNumber = 0 , header = false , separator = "|"  , quoteValues = true , quote="\""
+---
+payload map {
+	"ID" : $.Id,
+	"Name" : $.Name,
+	"Case__c" : $.Case__c as String default "",
+	"Gift_Card_Amount__c" : $.Gift_Card_Amount__c as String default "",
+	"Gift_Card_Issue__c" : $.Gift_Card_Issue__c as String default "", 
+	"Gift_Card_Number__c" : $.Gift_Card_Number__c as String default "", 
+	"Original_Gift_Card_Number__c" : $.Original_Gift_Card_Number__c as String default "", 
+	"Owner" : $.CreatedBy.FederationIdentifier 
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+		<set-variable value="${sfsc.giftcardheaders}" doc:name="Set GiftCard Header Variable" doc:id="d727b3ab-40e3-466d-aaff-535728cf81f7" variableName="headers"/>
+		
+		<ee:transform doc:name="OutputFilename" doc:id="6d985a53-a969-40df-bc80-86df8afd7e7d" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="OutputFilename" ><![CDATA[%dw 2.0
+output application/java
+---
+p('datawarehouse.filename.giftcard') ++ "_" ++ (now() as String {format: p('azure.file.name.format')}) ++ "_" ++ vars.counter ++ p('azure.file.extension')
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+					<flow-ref doc:name="Azure-API_CallFlow" doc:id="7125edb5-1ee4-461e-bb19-495945b72310" name="Azure-API_CallFlow" />
+				</when>
+				<when expression="#[vars.recordType == p('sfsc.sobject.type.coupon')]">
+					<ee:transform doc:name="Converting Paylod to CSV" doc:id="36225dd1-d3fb-40d6-b425-c54fa5360afa">
+		<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv headerLineNumber = 0 , header = false , separator = "|"  , quoteValues = true , quote="\""
+---
+payload map {
+	"ID" : $.Id,
+	"Name" : $.Name,
+	"Case__c" : $.Case__c,
+	"Coupon_Type__c" : $.Coupon_Type__c,
+	"Date_Issued__c" : $.Date_Issued__c,
+	"Owner" : $.CreatedBy.FederationIdentifier
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+						<set-variable value="${sfsc.couponheaders}" doc:name="Set Coupon Header Variable" doc:id="a67044d7-d1f8-4821-8635-7a41506f537f" variableName="headers"/>
+		<ee:transform doc:name="OutputFilename" doc:id="01509066-2414-4982-b2f4-6d561bf2a7db" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="OutputFilename" ><![CDATA[%dw 2.0
+output application/java
+---
+p('datawarehouse.filename.coupon') ++ "_" ++ (now() as String {format: p('azure.file.name.format')}) ++ "_" ++ vars.counter ++ p('azure.file.extension')
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+					<flow-ref doc:name="Azure-API_CallFlow" doc:id="ff414814-af16-4a11-85a8-89a5df1cdf76" name="Azure-API_CallFlow"/>
+	
+				</when>
+				<when expression="#[vars.recordType == p('sfsc.sobject.type.emailmessage')]">
+					<ee:transform doc:name="Converting Paylod to CSV" doc:id="4c75e7df-427d-4d90-9a4b-73ddccf03c51">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv headerLineNumber = 0 , header = false , separator = "|"  , quoteValues = true , quote="\""
+---
+payload map 
+ { "ActivityId" : $.ActivityId, 
+ "BccAddress" : $.BccAddress,
+ "CcAddress" : $.CcAddress, 
+ "CreatedById" : $.CreatedById,
+ "CreatedDate" : $.CreatedDate,
+ "EmailTemplateId" : $.EmailTemplateId,
+ "FirstOpenedDate" : $.FirstOpenedDate,
+ "FromAddress" : $.FromAddress,
+ "FromName" : $.FromName,  
+ "HasAttachment" : $.HasAttachment, 
+ "Headers" : $.Headers, 
+ //"HtmlBody" : $.HtmlBody, 
+ "Id" : $.Id,
+ "Incoming" : $.Incoming,
+ "IsBounced" : $.IsBounced,
+ "IsClientManaged" : $.IsClientManaged, 
+ "IsDeleted" : $.IsDeleted, 
+ "IsExternallyVisible" : $.IsExternallyVisible,
+ "IsOpened" : $.IsOpened, 
+ "IsPrivateDraft" : $.IsPrivateDraft, 
+ "IsTracked" : $.IsTracked,
+ "LastModifiedById" :  $.LastModifiedById,
+ "LastModifiedDate" : $.LastModifiedDate,
+ "LastOpenedDate" : $.LastOpenedDate, 
+ "MessageDate" : $.MessageDate ,
+"MessageIdentifier" : $.MessageIdentifier,
+"ParentId" : $.ParentId,
+ "RelatedToId" : $.RelatedToId, 
+ "ReplyToEmailMessageId" : $.ReplyToEmailMessageId, 
+ "Status" : $.Status,
+ "Subject" : $.Subject,
+ "SystemModstamp" : $.SystemModstamp, 
+ //"TextBody" : $.TextBody, 
+ "ThreadIdentifier" : $.ThreadIdentifier, 
+ "ToAddress" : $.ToAddress, 
+ "ValidatedFromAddress" : $.ValidatedFromAddress 
+ }]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<set-variable value="${sfsc.emailmessageheaders}" doc:name="Set EmailMessage Header Variable" doc:id="ab466574-6a9d-4a97-b4c8-5f5782e626c5" variableName="headers" />
+					<ee:transform doc:name="OutputFilename" doc:id="3e9bc294-b014-4280-8a2e-b39465201985" >
+						<ee:message />
+						<ee:variables >
+							<ee:set-variable variableName="OutputFilename" ><![CDATA[%dw 2.0
+output application/java
+---
+p('datawarehouse.filename.emailmessage') ++ "_" ++ (now() as String {format: p('azure.file.name.format')}) ++ "_" ++ vars.counter ++ p('azure.file.extension')
+]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<flow-ref doc:name="Azure-API_CallFlow" doc:id="7ba7b34a-d72e-4fb5-8814-448e322b90d9" name="Azure-API_CallFlow"/>
+				</when>
+				<otherwise>
+					<logger level="INFO" doc:name="Logger" doc:id="b54e3d67-77b0-415f-a54f-6033ee29ffe0" message="CorrelationId:: #[vars.correlationId]  BatchIfo in Completed State with 0 records to Processed."/>
+				</otherwise>
+			
+</choice>
+		</foreach>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="8774f08f-745c-4ceb-903f-c182d59ff50e" type="${vm.listener.any.error.type}">
+				<logger level="INFO" doc:name="Loggin Error" doc:id="73de25a5-4d69-4151-b47c-3d1dda9fd775" message="CorrelationId:: #[vars.correlationId] Error:: #[error.description]"/>
+			</on-error-continue>
+		</error-handler>
+	
+</flow>
+
+	
+	<sub-flow name="Azure-API_CallFlow" doc:id="c1f79950-b272-49df-aeab-2edab8301f8e" >
+		<ee:transform doc:name="Remove Line Break" doc:id="4a3d4e2f-69aa-45b7-a373-638595345f6b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0 
+output application/csv header=false, separator = "|" , quoteValues = true
+--- 
+payload map ($ mapObject(value, key) -> {(key) : (value replace '\n' with '') replace '\r' with ''})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<parse-template doc:name="Parse Template" doc:id="16733ef9-dca8-4fdf-b513-59fd4545937a" >
+			<content >#[vars.headers]
+#[payload]</content>
+		</parse-template>
+		<logger level="INFO" doc:name="Log File Name and Content" doc:id="b788f326-6f2c-44a8-a5c5-001c929c352f" message="CorrelationId:: #[vars.correlationId] File getting upserted: File Name: #[vars.outputFilename]"/>
+		<try doc:name="Try" doc:id="7f992159-f779-44d1-be18-b45106b81faf" >
+			<http:request method="PUT" doc:name="Create/Update BLOB" doc:id="12ea2520-e071-4e69-a238-b2f485e2a293" config-ref="Azure_Rest_API" path="#['${azure.file.path}' ++ '/' ++ vars.OutputFilename ++ '?' ++ '${azure.sastoken}']">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"x-ms-blob-type" : '${azure.blob.type}'
+}]]]></http:headers>
+		</http:request>
+			<logger level="INFO" doc:name="Logger" doc:id="c8e33608-35e5-47e8-aedd-ca8b3ff4e073" message="CorrelationId:: #[vars.correlationId] File #[vars.OutputFilename] Written Successfully at Azure." />
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="fd0bbf29-e98a-42cf-87f5-ac2623dbe09b" >
+					<async doc:name="Async" doc:id="21b89545-c20b-48aa-8c39-68129376bbe8" >
+						<ee:transform doc:name="Notification Payload" doc:id="20f849f1-4dbf-4765-bf08-ece1ae22e27f">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json --- 
+{     
+	"type": p('email.notification.type.info'),    
+	"subject": p('failure.azure.email.notification.subject'),    
+	"message": p('failure.azure.email.notification.message') ++ vars.outputFilename as String,    
+	"recipient": p('email.notification.recipients') splitBy "," , 
+	"integrationName" : p('integration.name')  
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+						<flow-ref doc:name="Notification_flow" doc:id="99d8d693-84aa-49bc-8b1c-0651039564e8" name="Notification_flow" />
+					</async>
+				</on-error-continue>
+			</error-handler>
+		</try>		
+	
+</sub-flow>
+	
+
+</mule>

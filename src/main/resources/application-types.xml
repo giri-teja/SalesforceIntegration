@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<types:mule xmlns:types="http://www.mulesoft.org/schema/mule/types">
+  <types:catalog>
+    <types:type name="cachejson" format="json">
+      <types:shape format="weave" example="examples/cache.json"><![CDATA[%dw 2.0
+type cachejson = {|
+  lastRunDateCoupon: String, 
+  lastRunDateCase: String
+|} {"MetadataFormat": "json",
+"example": "{\"lastRunDateCoupon\":\"2019-09-03\",\"lastRunDateCase\":\"2019-09-03\"}"}
+
+]]></types:shape>
+    </types:type>
+    <types:type name="storeJson" format="java">
+      <types:shape format="raml"><![CDATA[#%RAML 1.0 DataType
+type: string]]></types:shape>
+    </types:type>
+  </types:catalog>
+  <types:enrichment select="#659e0a1c-2fac-443a-b2c0-5c1920de68cd">
+    <types:processor-declaration>
+      <types:input-event>
+        <types:message>
+          <types:payload type="cachejson"/>
+        </types:message>
+      </types:input-event>
+    </types:processor-declaration>
+  </types:enrichment>
+</types:mule>

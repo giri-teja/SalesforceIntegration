@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd 
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<sub-flow name="order-volumeIntegration-subFlow" doc:id="01bfc273-7d55-4ef5-b009-e986df2de1bf" >
+		<flow-ref doc:name="fetchBIdata-upserttosfsc" doc:id="a9417632-5832-4900-a470-7f2ad2f03d5c" name="fetchBIdata-upserttosfsc" />
+		<flow-ref doc:name="wait-until-job-completes-subflow" doc:id="adae6ac3-96b9-4f7f-8d91-35657ebd19e0" name="wait-until-job-completes-subflow" />
+		<flow-ref doc:name="retrievefailedRecords-subFlow" doc:id="d8f3f409-1714-4784-a525-95ac5c6c13d7" name="retrievefailedRecords-subFlow" />
+	</sub-flow>
+	<flow name="scheduler_dailyTransaction" doc:id="06847620-8b44-431d-9c61-0617c742b327" >
+		<scheduler doc:name="Scheduler" doc:id="9f70c70c-aafc-4d3c-8243-880f70e58217" >
+			<scheduling-strategy>
+				<cron expression="${dwhorder.volume.scheduler.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		<set-variable value="#[[now(),uuid()]]" doc:name="Set Logger ID" doc:id="1b3ef5bc-0244-4d8c-a8b3-7dfe8f0ebfb4" variableName="transactionLogging"/>
+		<os:retrieve doc:name="Retrieve lastRunDate" doc:id="d1b0992f-2f5b-40a9-951a-82ed6afa2865" key="lastRunDate" objectStore="Object_store_Watermark">
+		</os:retrieve>
+		<ee:transform doc:name="Set QueryParams" doc:id="96f85d1f-def2-452f-b263-52639556a043" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="queryParams" ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	"toModifiedDate" : payload
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<set-variable value="#[now()]" doc:name="Set Current Time" doc:id="8fa77fdd-284a-4e0b-96d6-65b4e97ca80d" variableName="currentTime"/>
+		<flow-ref doc:name="order-volumeIntegration-subFlow" doc:id="f68d43dc-44a2-4a83-bf23-9bbba6166af0" name="order-volumeIntegration-subFlow" />
+		<os:store doc:name="upadte lastRunDate to Object Store" doc:id="a6ab0045-ed95-44cd-a85a-972344e50969" key="lastRunDate" objectStore="Object_store_Watermark">
+			<os:value><![CDATA[#[vars.currentTime as String {format: p('lastrundate.date.format')}]]]></os:value>
+		</os:store>
+		<logger level="INFO" doc:name="Log store current run date" doc:id="3c8ea1e7-a60f-4b69-8f90-7bb5d547db78" message=" #[vars.transactionLogging[1]] : updated last run date to current run date #[vars.currentTime as String {format: p('lastrundate.date.format')}]" />
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="dd911418-9c5d-4108-b61c-aafd90d8b0ce" type="ANY">
+				<logger level="INFO" doc:name="Log Error Notification" doc:id="4916bfc2-179f-4f56-a3f4-2f6099b81fe9" message="TransactionID: #[vars.transactionID]-###Error in Processing###" />
+				<ee:transform doc:name="Frame Error Payload" doc:id="0e6ae2a0-f73c-4e2b-a17c-0a0359da6438" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "type": p('email.notification.type.info'),
+    "subject": p('email.notification.subject.batch'),
+    "message": "Error Raised for JobId : " ++ if (isEmpty(payload.id)) "" else payload.id ++ " Error Description : " ++ error.description ,
+    "priority": "MINOR",
+    "recipient": p('email.notification.recipients') splitBy ","
+  
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="sendEmail-Subflow" doc:id="15885c04-40a7-4313-9caf-0ef61f4e6034" name="sendEmail-Subflow"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	
+	<flow name="fetchBIdata-upserttosfsc" doc:id="f876c8a6-0879-4554-895c-92a070740a35" >
+		<flow-ref doc:name="Datawarehouse-API_CallFlow" doc:id="10f3c0b0-a26d-4910-acf0-05e765e23b76" name="Datawarehouse-API_CallFlow"/>
+		<ee:transform doc:name="Create Salesforce Request" doc:id="ffe450c9-9d52-49ef-a08a-a274af6e824c">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map {
+	'store__r.Store_Number__c': $.Store_ID as String {format : p('store.number.format')},
+	'Date__c': $.Effective_Date,
+	'Transactions__c': $.Total_Transactions,
+	'Store_Date_Combo_Key__c': $.Store_ID as String {format : p('store.number.format')} ++ ($.Effective_Date as Date as String {format: "yyyy-MM-dd"})
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger - stores upserting" doc:id="6c10ced9-aad5-4bda-bfb8-bd1f7d17bfa8" message="#[vars.transactionLogging[1]] : Initiating request to upsert for stores #[payload.stores]"/>
+		<http:request method="PUT" doc:name="Upsert the Data to SFSC" doc:id="f29ab74f-4f9c-4670-9489-45a4123db586" config-ref="SFSC_API_Request_configuration" path="${sfsc.upsert.resourcepath}" outputMimeType="application/json" requestStreamingMode="ALWAYS">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"sobject" : p('sfsc.upsert.dailytransactioncount')
+}]]]></http:uri-params>
+		</http:request>
+		<set-variable value="#[payload.id]" doc:name="Set JobId Variable" doc:id="8f30372c-1336-4f35-a913-887a09a48f3c" variableName="jobId"/>
+		<logger level="INFO" doc:name="Log job response" doc:id="449fd902-2c79-4144-9cdc-fbb627227dea" message="#[vars.transactionLogging[1]] : Logging the create job response #[payload]"/>
+	
+</flow>
+<sub-flow name="Datawarehouse-API_CallFlow" doc:id="efe35d48-0c0e-4961-80e4-1764d99bf506" >
+		<logger level="INFO" doc:name="Log the correlation ID" doc:id="9075bf78-ef41-4ffc-8994-f491b7d7eda9" message="TransactionID: #[vars.transactionLogging[1]] : Begin DWH data fetch"/>
+		<http:request method="GET" doc:name="Datawarehouse Request API" doc:id="b0e6010e-4c33-42e9-95e8-54bf004a7154" config-ref="Store_API_HTTP_Request_configuration" path="${system.datawarehouse.api.path}" outputMimeType="application/json">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"client_id" : '${sa.store_client_id}',
+	"client_secret" : '${sa.store_client_secret}'
+}]]]></http:headers>
+		<http:query-params>#[vars.queryParams]</http:query-params>
+		<!-- <http:query-params>#[vars.queryParams]</http:query-params> -->
+		</http:request>
+		
+		
+	
+
+</sub-flow>
+
+
+</mule>

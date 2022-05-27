@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway"
+	xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
+	xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd 
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
+	<configuration-properties doc:name="Configuration properties" doc:id="1ac67dae-ac7c-451c-a6e4-5798aeb2d816" file="config/caseys-salesforce-integration-${env}.properties" />
+	<http:request-config name="SFSC_API_Request_configuration" doc:name="HTTP Request configuration" doc:id="f0d41834-6310-423d-ae9b-565f9a935765" basePath="${system.sfsc.api.base}" responseTimeout="${system.sfsc.http.response.timeout}">
+		<http:request-connection protocol="HTTPS" host="${system.sfsc.api.host}" port="${system.sfsc.api.port}" maxConnections="${system.sfsc.http.max-connection}" connectionIdleTimeout="${system.sfsc.http.connection.timeout}" responseBufferSize="${system.sfsc.http.response.buffer.size}" streamResponse="true">
+			<reconnection >
+				<reconnect frequency="${system.sfsc.http.reconnection.frequency}" count="${system.sfsc.http.reconnection.attempts}" />
+			</reconnection>
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+		</http:request-connection>
+		<http:default-headers >
+			<http:default-header key="client_id" value="${system.sfsc.api.client_id}" />
+			<http:default-header key="client_secret" value="${system.sfsc.api.client_secret}" />
+		</http:default-headers>
+	</http:request-config>
+	
+	<http:request-config name="HTTP_Customer_ProcessAPI_configuration" doc:name="HTTP Request configuration" doc:id="23d590aa-6914-4a77-9677-232d389093fc" basePath="${pa.customer.api.base}" responseTimeout="${pa.http.response.timeout}">
+		<http:request-connection host="${pa.customer.api.host}" port="${pa.customer.api.port}" protocol="HTTPS" maxConnections="${pa.http.max-connection}" connectionIdleTimeout="${pa.http.connection.timeout}" responseBufferSize="${pa.http.response.buffer.size}">
+			<reconnection >
+				<reconnect count="${pa.http.reconnection.attempts}" frequency="${pa.http.reconnection.frequency}"/>
+			</reconnection>
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+		</http:request-connection>
+	</http:request-config>
+	<http:request-config name="SFMC_API_Request_configuration" doc:name="HTTP Request configuration" doc:id="a48b448c-9b7e-48ab-a887-22a1938642dc" basePath="${system.sfmc.api.base}" responseTimeout="${system.sfmc.http.response.timeout}">
+		<http:request-connection protocol="HTTPS" host="${system.sfmc.api.host}" port="${system.sfmc.api.port}" maxConnections="${system.sfmc.http.max-connection}" connectionIdleTimeout="${system.sfmc.http.connection.timeout}" responseBufferSize="${system.sfmc.http.response.buffer.size}" streamResponse="true">
+			<reconnection >
+				<reconnect frequency="${system.sfmc.http.reconnection.frequency}" count="${system.sfmc.http.reconnection.attempts}" />
+			</reconnection>
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+		</http:request-connection>
+		<http:default-headers >
+			<http:default-header key="client_id" value="${system.sfmc.api.client_id}" />
+			<http:default-header key="client_secret" value="${system.sfmc.api.client_secret}" />
+		</http:default-headers>
+	</http:request-config>
+	
+	
+	
+	
+	<http:request-config name="Notification_Request_configuration1" doc:name="HTTP Request configuration" doc:id="a067cb8e-bbe8-4cbb-907b-07e1cca93a6f" basePath="${http.email.notification.basepath}" responseTimeout="${http.response.timeout}">
+		<http:request-connection host="${http.email.notification.api.host}" protocol="HTTPS" port="${http.email.notification.api.port}" connectionIdleTimeout="${http.response.timeout}" maxConnections="${http.email.notification.api.max.connection}" responseBufferSize="${http.email.notification.api.resp.buffer}">
+			<reconnection >
+				<reconnect frequency="${http.email.notification.retry.freq}" count="${http.email.notification.retry.attempts}" />
+			</reconnection>
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+		
+</http:request-connection>
+	</http:request-config>
+	
+	<http:request-config name="Azure_Rest_API" doc:name="HTTP Request configuration" doc:id="63d862d3-266f-4934-9668-a73398d9078d" basePath="${azure.basepath}" responseTimeout="${azure.response.timeout}">
+		<http:request-connection host="${azure.host}" protocol="HTTPS" port="${azure.port}" maxConnections="${azure.max.connections}" connectionIdleTimeout="${azure.connection.idle.timeout}" responseBufferSize="${azure.resp.buffer}">
+			<reconnection >
+				<reconnect frequency="${azure.response.timeout}" count="${azure.reconnect.freq}" />
+			</reconnection>
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+		
+</http:request-connection>
+	</http:request-config>
+	<os:object-store name="Batch_Object_store" doc:name="Object store" doc:id="2764f00e-805b-4ed6-b8f1-4bd72ca2311f" persistent="false" maxEntries="${object.store.max.entries}" entryTtl="${object.store.entry.ttl}" expirationInterval="${object.store.expiration.interval}" expirationIntervalUnit="SECONDS" config-ref="ObjectStore_Config"/>
+	<os:object-store name="Accounts_Object_store" doc:name="Object store" doc:id="6978efc8-617e-4966-956d-6a1b54996db0" persistent="false" maxEntries="${accounts.object.store.max.entries}" entryTtl="${accounts.object.store.entry.ttl}" expirationInterval="${accounts.object.store.expiration.interval}" expirationIntervalUnit="SECONDS" config-ref="ObjectStore_Config"/>
+	
+	<os:config name="ObjectStore_Config" doc:name="ObjectStore Config" doc:id="3619c132-ed9a-4f31-9730-707704f3b4da" />
+	<os:object-store name="Object_store_Watermark" doc:name="Object store" doc:id="d0873f1c-5465-4db7-81c3-37ffb441d967" config-ref="ObjectStore_Config"/>
+	<vm:config name="BatchInfo_VM_Config" doc:name="VM Config" doc:id="1187a7dd-2a99-479e-9d67-6e845075f206">
+		<vm:queues >
+			<vm:queue queueName="${vm.queue.name}" />
+			<vm:queue queueName="${vm.queue.sfsc.update}" />
+			<vm:queue queueName="${vm.queue.sfmc.fetch}" />
+		</vm:queues>
+	</vm:config>
+	<http:request-config name="Store_API_HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="891fbafc-904e-4da6-91d1-822bee890965" responseTimeout="${sa.store.response.timeout}" basePath="${sa.store.basepath}">
+		<http:request-connection protocol="HTTPS" host="${sa.store.host}" port="${sa.store.port}" connectionIdleTimeout="${sa.store.idletimeout}" tlsContext="TLS_Context">
+			<reconnection >
+				<reconnect frequency="${sa.store.reconnect.freq}" count="${sa.store.reconnect.attempts}" />
+			</reconnection>
+		</http:request-connection>
+	</http:request-config>
+	<tls:context name="TLS_Context" doc:name="TLS Context" doc:id="ce09dc3c-4204-4ee4-9144-a043fce78acf" >
+		<tls:trust-store insecure="true" />
+		<tls:key-store type="jks" path="${key.path}" keyPassword="${key.keypassword}" password="${key.password}" />
+	</tls:context>
+	  <http:listener-config name="caseys-salesforce-integration-api-httpListenerConfig">
+        <http:listener-connection host="${https.listner.host}" port="${https.listener.port}" tlsContext="TLS_Context_Listener" protocol="HTTPS"/>
+    </http:listener-config>
+    <apikit:config name="caseys-salesforce-integration-api-config" raml="caseys-salesforce-integration-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <tls:context name="TLS_Context_Listener" doc:name="TLS Context" doc:id="fdf3a1f4-b9a9-49b9-8689-3ce053f877fe" >
+		<tls:trust-store insecure="true" />
+		<tls:key-store type="jks" path="${key.path}" keyPassword="${key.password}" password="${key.password}" />
+	</tls:context>
+	 <api-gateway:autodiscovery apiId="${api.id}" doc:name="API Autodiscovery" doc:id="aeeeccaa-24eb-4bf5-8b7a-afdb11e6d3b4" flowRef="caseys-salesforce-integration-api-main" />
+ </mule>

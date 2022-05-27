@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd 
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<sub-flow name="wait-until-job-completes-subflow" doc:id="5647e25e-4ee3-4c5e-98a9-072ee16581af" >
+		<until-successful maxRetries="${until.successful.max.retries}" doc:name="Until Successful - Iterate unless job completes" doc:id="882622fa-dba9-4d71-a067-47e5cf8cc6c6" millisBetweenRetries="${until.successful.retry.frequency}">
+					<flow-ref doc:name="check-job-completes-subflow" doc:id="04be3db0-c340-41a6-b447-da87fd494713" name="check-job-completes-subflow" />
+				</until-successful>
+	</sub-flow>
+	<sub-flow name="check-job-completes-subflow" doc:id="0445b398-5b8b-4c6a-aca1-b70e5b3b6767">
+		<http:request method="GET" doc:name="Fetch JOB status" doc:id="868e46e6-d336-4907-9461-f1d129db6200" path="${system.sfsc.bulkv2jobstatus}" config-ref="SFSC_API_Request_configuration">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"jobId" : vars.jobId
+}]]]></http:uri-params>
+		</http:request>
+		<choice doc:name="Job Completed ?" doc:id="bf710c39-6c3a-459b-882a-55c4e7e81ae9">
+			<when expression="#[payload.state == p('bulkv2.jobstatus')]">
+				<logger level="INFO" doc:name="Log Job Status  Completed" doc:id="4e5d6ae7-310b-436b-a18b-67c6072eb42a" message="TransactionID: #[vars.transactionLogging[1]] : loging all the bulk infos #[payload]" />
+			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="Log Job Status Incomplete" doc:id="4fe7494d-03e6-4f6d-ae67-528f5e7c8ee4" message="TransactionID: #[vars.transactionLogging[1]] : Job Id : #[payload.id], Job Status : #[payload.state]"/>
+				<raise-error doc:name="Raise Job Status Error" doc:id="81ce6fa8-aa79-4ac9-9ada-3a1a0f896b98" type="${sfsc.failed.raise.error.type}" description="${sfsc.failed.raise.error.description}" />
+			</otherwise>
+		</choice>
+		
+	
+
+</sub-flow>
+	<sub-flow name="retrievefailedRecords-subFlow" doc:id="68f35645-f7e0-482e-89d5-1ed1120c2783" >
+		<choice doc:name="Any Failed Records ?" doc:id="e7c31ad6-9d2b-4660-927c-068c4814fa07" >
+			<when expression="#[payload.numberRecordsFailed !=0]">
+				<http:request method="GET" doc:name="Retrieve Failed Records" doc:id="1184706a-58c2-433e-b1c9-0175fae971b0" config-ref="SFSC_API_Request_configuration" target="failedRecords" path="${sfsc.failed.record.path}${sfsc.jobstatus.recordtype}" requestStreamingMode="ALWAYS">
+					<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"jobId" : vars.jobId
+}]]]></http:uri-params>
+				</http:request>
+				<ee:transform doc:name="Frame Error Message Payload" doc:id="529337e3-492b-4b7f-a53a-b6afaec90aa7">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{"message":{
+	"Total Records" : payload.numberRecordsProcessed as String,
+	"Successful Records" : (payload.numberRecordsProcessed - payload.numberRecordsFailed) as String,
+	"Failed Records": payload.numberRecordsFailed as String,
+	"File Name": " ",
+	"Error Message" : "List of BatchInfo Failed in Job, JobId:: " ++ payload.id as String,
+	"Error Details" : (vars.failedRecords map ("RecordId: " ++ $.id as String ++ " " ++ p('error.details.msg.delimiter') ++ " " ++ $.errorMessage as String)) joinBy p('error.details.record.delimiter')
+   },
+"subject": if(payload.object=='Contact')p('email.notification.subject.batch.sfmc') else p('email.notification.subject.batch')
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<ee:transform doc:name="Frame Error Email Request" doc:id="b4246e59-7bf2-4b5f-83a9-e60c4c5edbce" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "type": p('email.notification.type.batch.failure'),
+    "subject": payload.subject,
+    "message": write(payload.message,"application/json") replace "\n" with "",
+    "priority": "MINOR",
+    "recipient": p('email.notification.recipients') splitBy ","
+  
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="sendEmail-Subflow" doc:id="eb2514f7-2159-4609-8531-383f6fc7ab74" name="sendEmail-Subflow" />
+			</when>
+			<when expression="#[vars.isSFMCSFSCSync default false]">
+				<logger level="INFO" doc:name="Log - No failed Records" doc:id="98acd864-39d5-4aa2-9cd1-6e6f2962b34a" message="TransactionID: #[vars.transactionLogging[1]] : No Failed Records"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Log - No failed Records" doc:id="28e381c9-c4da-42a3-a488-825d87f6732a" message="TransactionID: #[vars.transactionLogging[1]] : No Failed Records"/>
+				<ee:transform doc:name="Frame Info Message Payload" doc:id="92ba6f0b-0564-4d37-8795-d0541e780133">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{"message": {
+	"Total Records" : payload.numberRecordsProcessed as String,
+	"Successful Records" : (payload.numberRecordsProcessed - payload.numberRecordsFailed) as String,
+	"File Name": " "
+},
+"subject": if(payload.object=='Contact')p('email.notification.subject.batch.sfmc') else p('email.notification.subject.batch')
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<ee:transform doc:name="Frame Success Email Request" doc:id="bb3c0dc3-bf8c-45f7-8843-bfa14c8ce28a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "type": p('email.notification.type.batch.info'),
+    "subject": payload.subject,
+    "message": write(payload.message,"application/json") replace "\n" with "",
+    "priority": "MINOR",
+    "recipient": p('email.notification.recipients') splitBy ","
+    
+} ]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="sendEmail-Subflow" doc:id="8dd39d13-860e-4f3b-8968-7ee914e0f13e" name="sendEmail-Subflow"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="sendEmail-Subflow" doc:id="f94b28ff-72d4-4e02-893b-58a89082d71e" >
+		<async doc:name="Async" doc:id="8eee2a13-8dff-4a7b-9cf3-2b02484e57d8" >
+			<http:request method="POST" doc:name="Notification Service" doc:id="50230d50-ab30-4e27-8a45-92eed728919e" config-ref="Notification_Request_configuration1" path="${http.email.notification.path}" outputMimeType="application/json">
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	client_id : p('http.email.notification.clientid'),
+	client_secret : p('http.email.notification.clientsecret')
+}]]]></http:headers>
+			</http:request>
+		</async>
+	</sub-flow>
+		<sub-flow name="Notification_flow" doc:id="b6bf370b-d4eb-43ff-a9ee-c0c2c9a4833c" >
+		<logger level="INFO" doc:name="Log Mail Notification Payload" doc:id="c6f2368d-1e35-437d-b96d-50385cb9c4c6" message="TransactionID: #[vars.transactionLogging[1]], Final Notification Paylaod:: #[payload]"/>
+			<async doc:name="Async" doc:id="fa5616b1-2b86-4b48-859d-6323458e6533" >
+			<http:request method="POST" doc:name="Notification Service" doc:id="90001afd-d612-4b54-ad69-b762b425303a" config-ref="Notification_Request_configuration1" path="${http.email.notification.path}" outputMimeType="application/json">
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	client_id : p('http.email.notification.clientid'),
+	client_secret : p('http.email.notification.clientsecret')
+}]]]></http:headers>
+			</http:request>
+		</async>
+	</sub-flow>
+
+
+</mule>

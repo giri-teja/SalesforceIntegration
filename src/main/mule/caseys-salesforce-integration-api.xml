@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd  http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+    <flow name="caseys-salesforce-integration-api-main">
+        <http:listener config-ref="caseys-salesforce-integration-api-httpListenerConfig" path="${https.request.path}">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <set-variable value="#[[now(),uuid()]]" doc:name="Set Logger ID" doc:id="f8c647ff-0b5a-430e-a134-3aaeea9e92d3" variableName="transactionLogging" />
+		<apikit:router config-ref="caseys-salesforce-integration-api-config" doc:name="APIkit Router" doc:id="35b623d1-a78a-470f-b573-8bdfd7291839" />
+		<error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="caseys-salesforce-integration-api-console">
+        <http:listener config-ref="caseys-salesforce-integration-api-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="caseys-salesforce-integration-api-config"/>
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    
+    <flow name="get:\api\(sobject):caseys-salesforce-integration-api-config">
+        <logger level="INFO" doc:name="Logging Flow Name" message="TransactionID: #[vars.transactionLogging[1]] Received Request To Process sobject #[attributes.uriParams.sobject] FromDate:: #[attributes.queryParams.fromModifiedDate default &quot;&quot;] ToDate:: #[attributes.queryParams.toModifiedDate]" />
+        <choice doc:name="Choice" doc:id="8c1677ac-86b2-4106-9d23-49497fee8854">
+            <when expression="#[attributes.uriParams.sobject == 'dailytransaction']">
+                <ee:transform doc:name="Set sobject" doc:id="106a09b5-9cf2-4aad-a0eb-1f21606f4e02">
+                    <ee:message />
+                    <ee:variables>
+                        <ee:set-variable variableName="sobject"><![CDATA[%dw 2.0
+output application/java
+---
+p('sfsc.sobject.type.dailyTransaction')]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+                <ee:transform doc:name="Set QueryParams" doc:id="18151243-b80d-4d04-9634-aba6a62a621b">
+                    <ee:message />
+                    <ee:variables>
+                        <ee:set-variable variableName="queryParams"><![CDATA[%dw 2.0
+output application/java
+---
+if(isEmpty(attributes.queryParams.fromModifiedDate)){
+	toModifiedDate : attributes.queryParams.toModifiedDate
+}
+else{
+	toModifiedDate : attributes.queryParams.toModifiedDate,
+	fromModifiedDate : attributes.queryParams.fromModifiedDate		
+}]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+                <flow-ref doc:name="order-volumeIntegration-subFlow" doc:id="c880ed5a-8a2b-4ae5-afb2-573df6e33cce" name="order-volumeIntegration-subFlow" />
+            </when>
+            <otherwise>
+                <ee:transform doc:name="Set sobject" doc:id="81120200-de1f-4dd8-8a27-b408c98a9791">
+                    <ee:message />
+                    <ee:variables>
+                        <ee:set-variable variableName="sobject"><![CDATA[%dw 2.0
+output application/java
+---
+if(attributes.uriParams.sobject == 'contact')
+	p('sfsc.sobject.type.contact')
+else if (attributes.uriParams.sobject == 'case')
+	p('sfsc.sobject.type.case')
+else if (attributes.uriParams.sobject == 'coupon')
+	p('sfsc.sobject.type.coupon')
+else if(attributes.uriParams.sobject == 'giftcard')
+	p('sfsc.sobject.type.giftcard')
+else
+	p('sfsc.sobject.type.emailmessage')]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+                <ee:transform doc:name="Set QueryParams" doc:id="7ced3636-1f12-4e2a-a430-3638b371c733">
+                    <ee:message />
+                    <ee:variables>
+                        <ee:set-variable variableName="queryParams"><![CDATA[%dw 2.0
+output application/java
+---
+if(isEmpty(attributes.queryParams.fromModifiedDate)){
+	lowerbounddate : attributes.queryParams.toModifiedDate
+}
+else{
+	lowerbounddate : attributes.queryParams.fromModifiedDate,
+	upperbounddate : attributes.queryParams.toModifiedDate	
+}]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+                <flow-ref doc:name="caseys-sfsc-datawarehouse-common-subFlow" doc:id="0f25a81c-da7f-4399-b0f7-21595f6bc421" name="caseys-sfsc-datawarehouse-common-subFlow" />
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="get:\api\cache:caseys-salesforce-integration-api-config" doc:id="528cf8c1-bcdb-4c61-8ea3-85c942d27094">
+        <os:retrieve-all doc:name="Retrieve all" doc:id="b5f9dd7f-f19e-41a1-b1af-3aed099d4df1" objectStore="Object_store_Watermark" />
+        <ee:transform doc:name="Transform to JSON" doc:id="60efba3e-cf58-4b7f-ae31-1bfc05eff369">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logging OS Key Value" doc:id="af821618-055f-4792-b6af-f3455e3cbca2" message="TransactionID: #[vars.transactionLogging[1]]  Retrieved LastRunDate Data From OS:: #[payload]" />
+    </flow>
+    <flow name="put:\api\cache:caseys-salesforce-integration-api-config" doc:id="1c10a9da-cb5a-4970-8c21-580d350a8bfc">
+        <logger level="INFO" doc:name="Logger" doc:id="a11193d1-c58e-4c03-be7e-05eaf80c3039" message="TransactionID: #[vars.transactionLogging[1]]  Received Request to update OS #[payload]" />
+        <ee:transform doc:name="Transform Message" doc:id="659e0a1c-2fac-443a-b2c0-5c1920de68cd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload pluck $$ map {
+	key : $,
+	value: payload[$]
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <foreach doc:name="For Each" doc:id="56c85e21-b8f1-4cbe-97ed-611c6ae34769">
+            <os:store doc:name="Store" doc:id="d14945b2-c8c7-41ba-a24c-f7166ef6ae39" key="#[payload.key]" objectStore="Object_store_Watermark">
+                <os:value><![CDATA[#[payload.value]]]></os:value>
+            </os:store>
+        </foreach>
+        <logger level="INFO" doc:name="Logger" doc:id="1f8b22e9-0b37-4be9-8426-3408e052fe29" message="TransactionID: #[vars.transactionLogging[1]]  OS Updated Successfully" />
+    </flow>
+    
+</mule>

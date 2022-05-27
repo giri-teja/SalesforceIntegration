@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:sfdc-marketing-cloud="http://www.mulesoft.org/schema/mule/sfdc-marketing-cloud"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd 
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/sfdc-marketing-cloud http://www.mulesoft.org/schema/mule/sfdc-marketing-cloud/current/mule-sfdc-marketing-cloud.xsd">
+	<flow name="sfmc-call-Flow" doc:id="a7c0ca54-7c2d-422d-ad3e-f70d90188d7a" >
+		<vm:listener doc:name="Listener" doc:id="dfa5c775-946e-4c1a-ba63-18de1c79c901" config-ref="BatchInfo_VM_Config" numberOfConsumers="${vm.numberof.consumers.sfscupdate}" queueName="${vm.queue.sfmc.fetch}" timeout="${vm.queue.timeout.insec}"/>
+		<set-variable value="#[payload.loggerId]" doc:name="Set LoggerId" doc:id="e07e067a-1adf-4c47-b764-bcb1492f16c6" variableName="loggerId"/>
+		<set-variable value='#[[vars.loggerId, (vars.loggerId as String ++ " -requestno:" ++ payload.counter as String)]]' doc:name="Transaction Logging" doc:id="02caa95a-f776-496f-9c33-e67c273bb818" variableName="transactionLogging" />
+		<set-variable value="#[payload.counter as Number + 1]" doc:name="increment request counter" doc:id="e63f68d2-8d00-4730-9729-4b17b43fd0c0" variableName="counter" />
+		<logger level="INFO" doc:name="Logging SFMC Request" doc:id="2c63ccc9-f5f8-41eb-949f-b65a293838df" message="TransactionID: #[vars.transactionLogging[1]] : Begin SFMC  dataextension fetch with requestID: #[payload.requestId]"/>
+		<until-successful maxRetries="${sfmc.sfsc.de.max.entries}" doc:name="Until Successful" doc:id="170ac28c-74df-4d46-9637-7f4b682b96f4" millisBetweenRetries="${sfmc.sfsc.de.time.interval}">
+			<http:request method="GET" doc:name="fetch DE Records from SFMC" doc:id="78f12468-d2bb-4cd7-98be-06aae6931335" config-ref="SFMC_API_Request_configuration" path="${sfmc.retrieve.resourcepath}" outputMimeType="application/json" requestStreamingMode="ALWAYS" sendCorrelationId="ALWAYS" correlationId="#[vars.transactionLogging[1] as String]">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"requestid" : payload.requestId
+}]]]></http:query-params>
+		</http:request>
+		</until-successful>
+		<logger level="INFO" doc:name="Logging SFMC Response" doc:id="c8493d7f-d102-4e9e-bce3-5a4d2be1f740" message="TransactionID: #[vars.transactionLogging[1]] : SFMC  dataextension Response Received"/>
+		<choice doc:name="is Payload empty?" doc:id="1e2cc6c3-1ab2-46ab-a689-68400caa0011">
+			<when expression="#[payload.RetrieveResponseMsg.OverallStatus==p('sfmc.response.moredata')]">
+				<logger level="INFO" doc:name="MoreDataAvailable" doc:id="786d1b5d-daee-405a-bc15-74f8f1cee70c" message="TransactionID: #[vars.transactionLogging[1]] : MoreDataAvailable with RequestID:: #[payload.RetrieveResponseMsg.RequestID]" />
+				<vm:publish doc:name="Publish SFSC Update Job" doc:id="5dde8c2e-77e3-4987-b055-20e3a50a6b99" config-ref="BatchInfo_VM_Config" queueName="${vm.queue.sfsc.update}" timeout="${vm.queue.timeout.insec}" sendCorrelationId="ALWAYS" correlationId="#[vars.transactionLogging[1]]"/>
+								<!-- <flow-ref doc:name="sfmc-call-Flow" doc:id="9416e403-defb-480e-a8a2-939a830ae3bf" name="sfmc-call-Flow"/>
+ -->		
+ 				<vm:publish doc:name="Publish SFMC Fetch" doc:id="27a76cf1-e4ab-4bb8-9362-29ec36037b4f" config-ref="BatchInfo_VM_Config" timeout="${vm.queue.timeout.insec}" queueName="${vm.queue.sfmc.fetch}">
+					<vm:content ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	"requestId" : payload.RetrieveResponseMsg.RequestID,
+	"counter"   : vars.counter,
+	"loggerId"  : vars.loggerId
+}]]]></vm:content>
+				</vm:publish>
+			</when>
+			<when expression="#[payload.RetrieveResponseMsg.OverallStatus==p('sfmc.response.ok')]">
+				<choice doc:name="Choice" doc:id="d693407f-80ff-4a34-a547-0003cff61c46" >
+					<when expression="#[isEmpty(payload.RetrieveResponseMsg.Results)]">
+						<logger level="INFO" doc:name="Log No Record" doc:id="25ba6eb4-e5f3-42dd-b162-66fa7366292c" message="TransactionID: #[vars.transactionLogging[1]] : : No Record - No Further Processing Required for the request"/>
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="All Records Retrieved" doc:id="aa7f73c3-0d43-4fba-af2e-0fd1acd5775b" message="TransactionID: #[vars.transactionLogging[1]] : : All Records has been retrieved, Initiating SFSC job update request." />
+						<vm:publish queueName="${vm.queue.sfsc.update}" doc:name="Publish SFSC Update Job" doc:id="4b584b01-ad90-4d43-92ed-4a6d1395dd72" config-ref="BatchInfo_VM_Config" timeout="${vm.queue.timeout.insec}" sendCorrelationId="ALWAYS" correlationId="#[vars.transactionLogging[1]]"/>
+					</otherwise>
+				</choice>
+				<flow-ref doc:name="sfmc-sfsc-emailNotification-subFlow" doc:id="b1bede00-d2ca-4da9-9870-1aa7c1f81b80" name="sfmc-sfsc-emailNotification-subFlow"/>
+			</when>
+			<when expression="#[(payload.RetrieveResponseMsg.OverallStatus as String) startsWith p('sfmc.response.error')]">
+				<logger level="INFO" doc:name="Logging Error Details" doc:id="aaf62804-ca1b-4019-88ee-ebb83846de47" message="TransactionID: #[vars.transactionLogging[1]] : : Raising Error with Description :: #[payload.RetrieveResponseMsg.OverallStatus]" />
+				<raise-error doc:name="Raise error" doc:id="78168b82-03c4-4a2d-8070-6fb9caf87060" type="${sfmc.response.errortype}" description="#[payload.RetrieveResponseMsg.OverallStatus]"/>
+			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="Logging Response" doc:id="9aeac1bf-cc64-4083-9352-cefc99f84c5a" message="TransactionID: #[vars.transactionLogging[1]] : : Status:::: #[payload.RetrieveResponseMsg.OverallStatus], No Implementation on this status"/>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="scheduler_sfmc-sfsc_sync" doc:id="06847620-8b44-431d-9c61-0617c742b328" >
+		<scheduler doc:name="Scheduler" doc:id="9f70c70c-aafc-4d3c-8243-880f70e58218" >
+			<scheduling-strategy>
+				<cron expression="${sfmc.scheduler.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		<set-variable value='#[now() as String  {format: "ddMMyyyyHHmmss"}]' doc:name="Set Logger ID" doc:id="1b3ef5bc-0244-4d8c-a8b3-7dfe8f0ebfb4" variableName="loggerId"/>
+		<vm:publish queueName="${vm.queue.sfmc.fetch}" doc:name="Publish SFMC Fetch" doc:id="d02b3349-c42f-4992-b22b-d4d4fe2177e0" config-ref="BatchInfo_VM_Config" timeout="${vm.queue.timeout.insec}">
+			<vm:content ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+	"requestId" : "",
+	"counter" : 1,
+	"loggerId" : vars.loggerId
+}]]]></vm:content>
+		</vm:publish>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="dd911418-9c5d-4108-b61c-aafd90d8b0ce" type="ANY">
+				<logger level="INFO" doc:name="Log Error Notification" doc:id="4916bfc2-179f-4f56-a3f4-2f6099b81fe9" message="TransactionID: #[vars.transactionLogging[1]]-###Error in Processing### Error_Description::: #[error.description]" />
+				<ee:transform doc:name="Frame Error Payload" doc:id="0e6ae2a0-f73c-4e2b-a17c-0a0359da6438" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "type": p('email.notification.type.info'),
+    "subject": p('email.notification.subject.batch.sfmc'),
+    "message": "TransactionLogging: " ++ vars.transactionLogging[1] ++ ", " ++ (if (isEmpty(payload.RetrieveResponseMsg.RequestID)) "" else "Error Raised for RequestId : " ++ (payload.RetrieveResponseMsg.RequestID as String)) ++ " Error Description : " ++ error.description ,
+    "priority": "MINOR",
+    "recipient": p('email.notification.recipients') splitBy ","
+  
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="sendEmail-Subflow" doc:id="15885c04-40a7-4313-9caf-0ef61f4e6034" name="sendEmail-Subflow"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="update_sfsc_object" doc:id="4610c03a-f699-4079-a6bb-d47516f8d065" >
+		<vm:listener doc:name="Listen SFSC Update Job" doc:id="8183e6fd-db82-4087-b704-e87d644a0f50" config-ref="BatchInfo_VM_Config" numberOfConsumers="${vm.numberof.consumers.sfscupdate}" queueName="${vm.queue.sfsc.update}" timeout="${vm.queue.timeout.insec}"/>
+		<set-variable value="#[[now(),correlationId]]" doc:name="setting transactionId" doc:id="44a6322d-3a8e-4ffc-bd38-65cec9960fdd" variableName="transactionLogging"/>
+		<ee:transform doc:name="Create Salesforce Request" doc:id="5eace33d-c342-4cbd-ab30-072495c8f5b7">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload.RetrieveResponseMsg.*Results.Properties map ( Property , indexOfProperty ) -> {
+	ID: Property.*Property.Value[0],
+	RF_Ordering_Segment__c: Property.*Property.Value[1],
+	Last_Marketing_Email_Sent__c: Property.*Property.Value[2],
+	Last_Transactional_Email_Sent__c: Property.*Property.Value[3],
+	Last_SMS_Message__c: Property.*Property.Value[4],
+	Last_Push_Message_Sent__c: Property.*Property.Value[5],
+	Order_Count_Last_270_Days__c: Property.*Property.Value[6]
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<logger level="INFO" doc:name="Logger - Customer updating" doc:id="874ac317-2d2d-4e75-9bf8-e375e40e7e2d" message="TransactionID : #[vars.transactionLogging[1]] : Initiating request to update Contact to Salesforce." />
+				<http:request method="PUT" doc:name="Create Update Job at SFSC" doc:id="08e356a0-5fdf-477b-bf40-17743fd52a8d" config-ref="SFSC_API_Request_configuration" path="${sfsc.update.resourcepath}" outputMimeType="application/json" requestStreamingMode="ALWAYS" sendCorrelationId="ALWAYS" correlationId="#[vars.transactionLogging[1]]">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"sobject" : p('sfsc.update.contact')
+}]]]></http:uri-params>
+					
+		</http:request>
+				<logger level="INFO" doc:name="Log job response" doc:id="d011f8df-63e6-4c05-a544-334acc12e3a3" message="#[vars.transactionLogging[1]] : Logging the create job response #[payload]" />
+		<set-variable value="#[payload.id]" doc:name="Set JobId Variable" doc:id="5f59b914-a859-41a0-a42f-8005bde5bfd3" variableName="jobId" />
+		<flow-ref doc:name="wait-until-job-completes-subflow" doc:id="adae6ac3-96b9-4f7f-8d91-35657ebd19e0" name="wait-until-job-completes-subflow" />
+		<set-variable value="#[true]" doc:name="set isSFMCSFSCSync flag" doc:id="fe6ad3ee-f245-4482-ad7a-1e47c791604a" variableName="isSFMCSFSCSync"/>
+		<flow-ref doc:name="retrievefailedRecords-subFlow" doc:id="d8f3f409-1714-4784-a525-95ac5c6c13d7" name="retrievefailedRecords-subFlow" />
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="a94b6e2c-87a5-4097-9f9d-3cf9ef6f64a7" type="ANY" >
+				<logger level="INFO" doc:name="Log Error Notification" doc:id="b6cefe61-44e8-4372-92a1-a23ae3fff30e" message="TransactionID: #[vars.transactionLogging[1]]-###Error in Processing### Error_Description::: #[error.description]" />
+				<ee:transform doc:name="Frame Error Payload" doc:id="74ec324a-4e00-4337-922b-93d894feb998" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "type": p('email.notification.type.info'),
+    "subject": p('email.notification.subject.batch.sfmc'),
+    "message": "TransactionLogging: " ++ vars.transactionLogging[1] ++ ", " ++ (if (isEmpty(payload.RetrieveResponseMsg.RequestID)) "" else "Error Raised for RequestId : " ++ (payload.RetrieveResponseMsg.RequestID as String)) ++ " Error Description : " ++ error.description ,
+    "priority": "MINOR",
+    "recipient": p('email.notification.recipients') splitBy ","
+  
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="sendEmail-Subflow" doc:id="cbd34b49-65d3-40f0-8a0a-c246ed244cf3" name="sendEmail-Subflow" />
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<sub-flow name="sfmc-sfsc-emailNotification-subFlow" doc:id="3a5bdae8-e84c-4061-bfda-23103a812999" >
+		<logger level="INFO" doc:name="Successful Job Jompletion" doc:id="54e9eea8-0862-4d90-9ad6-055a0d0bd798" message="TransactionID: #[vars.transactionLogging[1]] , Triggering Job Completion Email."/>
+		<ee:transform doc:name="Frame Successful Job Completion Email" doc:id="f93517a3-dfd4-4ad4-8361-0239f46746aa" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "type": p('email.notification.type.info'),
+    "subject": p('email.notification.subject.job'),
+    "message": "TransactionLogging: " ++ vars.transactionLogging[1] ++ ", " ++ p('email.notification.job.completion.message'),
+    "priority": "MINOR",
+    "recipient": p('email.notification.recipients') splitBy ","
+    
+} ]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="sendEmail-Subflow" doc:id="3d6aa0dd-457e-4638-944d-03c6a4f3ed6d" name="sendEmail-Subflow"/>
+	</sub-flow>
+
+
+</mule>

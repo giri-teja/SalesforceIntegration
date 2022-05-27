@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	
+	<sub-flow name="SFSC-API_CallFlow" doc:id="624ae899-48d2-4706-a7ef-a91a0d818b12" >
+		<logger level="INFO" doc:name="Log SFSC Request" doc:id="e09cf0b0-8744-4ec1-a1bc-098e51213cb2" message="TransactionID: #[vars.transactionLogging[1]] SFSC Request Create Job sobject: #[vars.sobject]  QueryParams:: #[vars.queryParams]"/>
+		<try doc:name="Try" doc:id="ca878337-3844-4d47-a3fa-3473d4644190" >
+			<http:request method="GET" doc:name="SFSC Request API" doc:id="d4c4dbba-453b-4bc3-bf0d-848a2805b590" config-ref="SFSC_API_Request_configuration" path="${system.sfsc.api.sobjects.path}">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"sobjects" : vars.sobject
+}]]]></http:uri-params>
+		<http:query-params>#[vars.queryParams]</http:query-params>
+		<!-- <http:query-params>#[vars.queryParams]</http:query-params> -->
+		</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="14e0e412-b6d8-4935-967c-879947b52b20" >
+					<logger level="INFO" doc:name="Logger" doc:id="e87c2b0d-911b-4406-ab5a-ce8b4b1f510f" message="TransactionID: #[vars.transactionLogging[1]] SFSC Request Create Job Failed Reason:: #[error.description]"/>
+					<async doc:name="Async" doc:id="186a5d24-5d7d-4069-9139-692e176b749e" >
+						<ee:transform doc:name="Notification Payload" doc:id="28ea81cb-d5f6-47c6-8c47-7e7a8eb55f13">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json --- 
+{     
+	"type": p('email.notification.type.info'),    
+	"subject": p('failure.createjob.email.notification.subject'),    
+	"message": p('failure.createjob.email.notification.message') ++ " " ++ vars.sobject,   
+	"recipient": p('email.notification.recipients') splitBy "," , 
+	"integrationName" : p('integration.name'),   
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+						<flow-ref doc:name="Notification_flow" doc:id="8331ef32-4232-4999-8da3-c202df1c62f6" name="Notification_flow" />
+					</async>
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<logger level="INFO" doc:name="Logger" doc:id="c30bf0a8-901f-447f-9333-6cf89a2382ab" message="TransactionID: #[vars.transactionLogging[1]]  Created Job JobId:: #[payload.jobId] State:: #[payload.state] sobject: #[vars.sfscuriparam]"/>
+	</sub-flow>
+	<flow name="getJobStateFlow" doc:id="69d68dba-e52e-4334-ad3b-8d20f54391db" >
+		<http:request method="GET" doc:name="Get Job Status" doc:id="e8250159-585c-4204-882f-63b9518e0c53" config-ref="SFSC_API_Request_configuration" path="${system.sfsc.api.getjobstatus.path}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"jobID" : payload.jobId
+}]]]></http:uri-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="1a655b9f-de1b-465c-bc62-b74caa0f08c2" message="JobId: #[payload.id] Job State:: #[payload.state]" />
+	</flow>
+	<sub-flow name="getBatchInfosFlow" doc:id="8538efeb-06cf-45ed-a412-451644a5af88" >
+		<http:request method="GET" doc:name="Get BatchInfo List" doc:id="1773bc2d-d82e-460b-8dc3-c86b0883c6dd" config-ref="SFSC_API_Request_configuration" path="${system.sfsc.api.getbatchinfo.path}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"jobid" : payload.jobId
+}]]]></http:uri-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="98ddb4fe-3d51-40da-a2df-ffb18f569f24" message="TransactionID: #[vars.transactionLogging[1]] JobId:: #[vars.jobId] BatchInfoList:: #[payload.id]" />
+		<os:contains doc:name="Contains" doc:id="03b93fa0-763e-4e6d-9657-90ec24f6eb5b" key="#[vars.jobId]" objectStore="Batch_Object_store" target="jobIdExist"/>
+		<choice doc:name="Choice" doc:id="3b8edfa0-ce5b-466e-a6c3-a0fbf04d1f89" >
+			<when expression="#[vars.jobIdExist]">
+				<os:retrieve doc:name="Retrieve BatchInfo" doc:id="da7eda80-7fc9-4452-aa6f-2f4049da10e8" key="#[vars.jobId]" target="batchInfosFromOS" targetValue="#[payload filter ($.resultSetProcessed == true)]" objectStore="Batch_Object_store"/>
+				<ee:transform doc:name="Update BtachInfo State to OS" doc:id="b3bacb43-4af7-408f-892a-fa3ad20dfba5">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var batchInfoArray = vars.batchInfosFromOS.id default []
+---
+payload reduce(item, acc = []) -> (acc + (if(contains(batchInfoArray, item.id as String)) (item ++ ("resultSetProcessed" : true)) else (item ++ ("resultSetProcessed" : false))))]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="a51ccb5a-36f2-4778-afa3-c130d998e0c8">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map ($ ++ "resultSetProcessed" : false)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</otherwise>
+		</choice>
+		<!-- <os:store doc:name="Store BatchInfo" doc:id="ca3762ba-e9b7-4be4-b11a-1cd68e78908c" key="#[vars.jobId]" objectStore="Batch_Object_store" />
+		 --><flow-ref doc:name="publish-completed-batchInfo-Flow" doc:id="3ba04966-ff48-4a95-8a3e-838bd8d960d9" name="publish-completed-batchInfo-Flow"/>
+	</sub-flow>
+	<flow name="publish-completed-batchInfo-Flow" doc:id="14ca5fc8-e11f-41de-b4bf-6df2af44675f" >
+		<!-- <os:retrieve doc:name="Retrieve" doc:id="1df01053-8fcd-4fc7-9122-dec8f0bb8ac7" key="#[vars.jobId]" objectStore="Batch_Object_store"/>
+		 --><ee:transform doc:name="Set checkBatchInfoListState" doc:id="c4e36fdd-426c-4f83-a4d3-c5b776692c40" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="checkBatchInfoListState" ><![CDATA[%dw 2.0
+output application/json
+---
+payload filter (($.state != (p('sfsc.batch.state.completed') as String)) and ($.state != (p('sfsc.batch.state.failed') as String)))]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Set Payload" doc:id="7f0ae2ca-f885-479c-ae03-4471a5da51da" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0 
+output application/json
+---
+payload filter (($.resultSetProcessed == false) and ($.state == p('sfsc.batch.state.completed')   or $.state == p('sfsc.batch.state.failed'))) map (($ - "resultSetProcessed") ++ {"resultSetProcessed" : true})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<os:store doc:name="Update ResultProcessed State OS" doc:id="7e50e51e-96b7-4355-911b-1398836930b8" key="#[vars.jobId]" objectStore="Batch_Object_store"/>
+		<choice doc:name="Choice" doc:id="1030cc96-6e66-4e91-94d2-e262ed5145ef" >
+			<when expression="#[isEmpty(payload filter ($.numberRecordsProcessed &gt; 0))]">
+				<logger level="INFO" doc:name="Logger" doc:id="ca59dd26-04ad-46cf-9c55-1be845c975bc" message="TransactionID: #[vars.transactionLogging[1]] JobId:: #[vars.jobId] No Records to Processed in BatchInfoList in Completed State:: #[payload.id]"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="7e8d3a5f-0fd8-4fb3-8956-b47bf01bc706" message="TransactionID: #[vars.transactionLogging[1]] JobId:: #[vars.jobId] Publishing BatchInfoList in Completed State:: #[payload.id]" />
+				<ee:transform doc:name="Filter Completed State Batch" doc:id="a49752d3-b682-44ba-a807-e1260f7a609a">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0 
+output application/json
+---
+{
+	metadata : {
+		jobId : vars.jobId
+	},
+	payload : payload filter (($.state == (p('sfsc.batch.state.completed') as String)) and ($.numberRecordsProcessed > 0))
+}
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<vm:publish queueName="${vm.queue.name}" doc:name="Get Query Result Set" doc:id="62b3db67-2ce9-4a3f-afe1-18c999d3a2d8" timeout="${vm.queue.timeout.insec}" config-ref="BatchInfo_VM_Config">
+				</vm:publish>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="82388ed2-0347-47e5-b104-fd24396348fb">
+			<when expression="#[isEmpty(vars.checkBatchInfoListState)]">
+				<logger level="INFO" doc:name="Logger" doc:id="c98e8284-ffff-4f51-b3a4-7a6e38c0c425" message="TransactionID: #[vars.transactionLogging[1]] JobId:: #[vars.jobId] All Batches are Processed." />
+				<!-- <flow-ref doc:name="onbatch-completionSub_Flow" doc:id="63f6b864-5846-440a-b710-d41ad40bf85a" name="onbatch-completionSub_Flow" />
+ -->			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="Logger" doc:id="d7ef0de3-714d-4217-8450-1e1632805c69" message="TransactionID: #[vars.transactionLogging[1]] JobId:: #[vars.jobId] BatchInfoList to Be Processed:: #[vars.checkBatchInfoListState.id]" />
+				<raise-error doc:name="Raise error" doc:id="186132a4-6dbd-4c3f-b34c-32d397777e2c" type="${sfsc.batch.state.error.type}" description="Batches are not in Completed State" />
+			</otherwise>
+		</choice>
+	</flow>
+	<sub-flow name="close-jobSub_Flow" doc:id="c2fbc206-04a3-4cb6-b192-9e272888095b" >
+		<http:request method="GET" doc:name="Request" doc:id="a9be7c7f-4ffa-47b8-9fb4-6c5da1de425b" config-ref="SFSC_API_Request_configuration" path="${system.sfsc.api.close.path}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"jobid" : vars.jobId
+}]]]></http:uri-params>
+		</http:request>
+		<logger level="INFO" doc:name="Logger" doc:id="117148bf-d911-4133-906b-3820d9aa1f92" message="JobId ::   Closed Successfully."/>
+	</sub-flow>
+	<sub-flow name="onbatch-completionSub_Flow" doc:id="0189c678-71da-4d5d-a2fc-667cc345014a" >
+		<flow-ref doc:name="close-jobSub_Flow" doc:id="c978ebc9-de5f-42bb-9969-c989d4614ae2" name="close-jobSub_Flow"/>
+		<os:retrieve doc:name="Retrieve" doc:id="88d85df2-306b-4e86-99c6-ece015694649" key="#[vars.jobId]" objectStore="Batch_Object_store">
+			<os:default-value ><![CDATA[#[""]]]></os:default-value>
+		</os:retrieve>
+		<choice doc:name="Choice" doc:id="b17cca6e-2b5c-4038-b25a-91b1f87ee306" >
+			<when expression="#[%dw 2.0 output application/json  --- isEmpty(payload filter ($.state != p('sfsc.batch.state.completed')))]" doc:id="7a4dd877-dc7e-41e2-8ddb-8a44b2f7a65f">
+				<ee:transform doc:name="Frame Success Msg" doc:id="de1e127a-9073-441c-bd39-4df1241d452f" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0  
+output application/json
+var totalRecords = payload reduce(item,acc = 0) -> (acc + item.numberRecordsProcessed as Number)
+var  failedRecords = payload reduce(item,acc = 0) -> (acc + item.numberRecordsFailed as Number)
+---
+{
+	"Total Records" : totalRecords,
+	"Successful Records" : totalRecords - failedRecords,
+	"File Name": vars.sobject default ""
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<ee:transform doc:name="Notification Payload" doc:id="3bdc8c33-e436-4f22-9430-971e5a6b8fbd" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json 
+--- 
+{     
+	"type": p('email.notification.type.batch.info'),    
+	"subject": p('email.notification.subject.job'),    
+	"message": write(payload,"application/json") replace "\n" with "",   
+	"recipient": p('email.notification.recipients') splitBy "," , 
+	"integrationName" : p('integration.name'),   
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Frame Error Msg" doc:id="5730372c-185d-4075-8ce0-fdb0700ba579" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0  
+output application/json 
+var failedBatchInfo = payload filter ($.state == p('sfsc.batch.state.failed')) 
+var totalRecords = payload reduce(item,acc = 0) -> (acc + item.numberRecordsProcessed as Number)
+var  failedRecords = payload reduce(item,acc = 0) -> (acc + item.numberRecordsFailed as Number)
+--- 
+{	"Total Records" : totalRecords, 
+	"Successful Records" : totalRecords - failedRecords, 	
+	"Failed Records": failedRecords, 
+	"File Name": vars.sobject default "", 
+	"Error Message" : "List of BatchInfo Failed in Job, JobId:" ++ failedBatchInfo.jobId[0] ++ " is:: " ++ (failedBatchInfo.id reduce(item,acc = "") -> (acc ++ item as String)), 
+	"Error Details" : (failedBatchInfo map ("BatchId: " ++ $.id ++ " " ++ p('error.details.msg.delimiter') ++ " " ++ $.stateMessage)) joinBy p('error.details.msg.delimiter') 
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<ee:transform doc:name="Notification Payload" doc:id="96855c1c-13ce-4d16-a517-1c3a06214841">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json 
+--- 
+{     
+	"type": p('email.notification.type.batch.info'),    
+	"subject": p('email.notification.subject.job'),    
+	"message": write(payload,"application/json") replace "\n" with "",   
+	"recipient": p('email.notification.recipients') splitBy "," , 
+	"integrationName" : p('integration.name'),   
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<flow-ref doc:name="Notification_flow" doc:id="0e6baade-8bb7-4c2f-a879-ea3becb22d01" name="Notification_flow"/>
+	</sub-flow>
+</mule>
